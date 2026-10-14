@@ -58,8 +58,12 @@ def _push_changes_to_repo() -> None:
 def _create_yml(link: str, project_name: str) -> None:
     """Creates the yaml file and writes to it."""
 
-    # Accept a full path to the .ipa (e.g. from .env); the workflow needs only the bare name
-    project_name = os.path.splitext(os.path.basename(project_name.strip().strip('"')))[0]
+    # Accept a full path to the .ipa (e.g. from .env); the workflow needs only the bare name.
+    # Only strip a real .ipa/.pck extension: os.path.splitext would treat the ".7" in
+    # "RockConcert_v1.0.7" as an extension and leave "RockConcert_v1.0".
+    project_name = os.path.basename(project_name.strip().strip('"'))
+    if project_name.lower().endswith((".ipa", ".pck")):
+        project_name = project_name[:-4]
 
     with open("action.yml") as f:
         reading = f.read()

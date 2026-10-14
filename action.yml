@@ -16,11 +16,14 @@ jobs:
           unzip archive.zip -d .
 
           # Detect the project name from the export (it changes with each version bump)
-          PROJ=$(ls -d *.xcodeproj | head -n 1)
-          if [ -z "$PROJ" ]; then
+          PROJ_PATH=$(find . -maxdepth 4 -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
+          if [ -z "$PROJ_PATH" ]; then
             echo "::error::No .xcodeproj found in the downloaded archive"
+            find . -maxdepth 3 -not -path "./.git*"
             exit 1
           fi
+          cd "$(dirname "$PROJ_PATH")"
+          PROJ=$(basename "$PROJ_PATH")
           NAME="${PROJ%.xcodeproj}"
           echo "Building $NAME"
 
