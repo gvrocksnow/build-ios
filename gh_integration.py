@@ -70,6 +70,14 @@ def change_permission(func, path, _):
     func(path)
 
 
+def _force_rmtree(path: str) -> None:
+    # `onexc` only exists on Python 3.12+; older versions use `onerror`
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=change_permission)
+    else:
+        shutil.rmtree(path, onerror=change_permission)
+
+
 def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_name: str):
     # Satisfy type checker
     assert isinstance(REPO_NAME, str)
@@ -89,7 +97,7 @@ def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_nam
 
             print(f"Deleting {REPO_NAME} folder and cloning {GH_USERNAME}/{REPO_NAME}!")
 
-            shutil.rmtree(REPO_NAME, onexc=change_permission)
+            _force_rmtree(REPO_NAME)
 
         os.system(f"git clone https://github.com/{GH_USERNAME}/{REPO_NAME}")
         print("Done cloning!")
@@ -106,7 +114,7 @@ def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_nam
                 sys.exit(0)
 
             print(f"Deleting {REPO_NAME} folder and creating {GH_USERNAME}/{REPO_NAME}!")
-            shutil.rmtree(REPO_NAME)
+            _force_rmtree(REPO_NAME)
 
         subprocess.run(["gh", "repo", "create", REPO_NAME, "--private", "--clone"], check=True)
 
