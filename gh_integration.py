@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 load_dotenv()
 GH_USERNAME = os.getenv("GH_USERNAME")
 REPO_NAME = os.getenv("REPO_NAME")
+# File name of the build workflow inside the repo's .github/workflows/
+WORKFLOW_FILE = (os.getenv("WORKFLOW_FILE") or "rock-concert-build_ios.yml").strip().strip('"')
+if not WORKFLOW_FILE.endswith((".yml", ".yaml")):
+    WORKFLOW_FILE += ".yml"
 
 
 if not GH_USERNAME or not REPO_NAME:
@@ -64,7 +68,7 @@ def _create_yml(link: str, project_name: str) -> None:
     print("Creating yaml file...")
     if not os.path.exists(f"{REPO_NAME}/.github/workflows/"):
         os.makedirs(f"{REPO_NAME}/.github/workflows/")
-    with open(f"{REPO_NAME}/.github/workflows/build.yml", "w") as file:
+    with open(f"{REPO_NAME}/.github/workflows/{WORKFLOW_FILE}", "w") as file:
         file.write(reading)
 
 
@@ -131,7 +135,8 @@ def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_nam
     if not confirm:
         sys.exit()
 
-    os.system(f'gh workflow run "Build iOS app" --repo {GH_USERNAME}/{REPO_NAME}')
+    # Run by file name: other workflows in the repo may share the "Build iOS app" display name
+    os.system(f"gh workflow run {WORKFLOW_FILE} --repo {GH_USERNAME}/{REPO_NAME}")
     print(
         f"Check out your build at https://github.com/{GH_USERNAME}/{REPO_NAME}/actions and then click the topmost entry. Then scroll down to artifacts, and click the download icon next to your app."
     )
