@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -55,24 +56,47 @@ def _push_changes_to_repo() -> None:
     )
 
 
-def _create_yml(link: str, project_name: str) -> None:
-    """Creates the yaml file and writes to it."""
-
+def _ipa_name(project_name: str) -> str:
     # Accept a full path to the .ipa (e.g. from .env); the workflow needs only the bare name.
     # Only strip a real .ipa/.pck extension: os.path.splitext would treat the ".7" in
     # "RockConcert_v1.0.7" as an extension and leave "RockConcert_v1.0".
     project_name = os.path.basename(project_name.strip().strip('"'))
     if project_name.lower().endswith((".ipa", ".pck")):
         project_name = project_name[:-4]
+    return project_name
 
-    with open("action.yml") as f:
-        reading = f.read()
-    reading = reading.replace("YOURLINKHERE", link).replace("Example-Project", project_name)
 
-    print("Creating yaml file...")
-    if not os.path.exists(f"{REPO_NAME}/.github/workflows/"):
-        os.makedirs(f"{REPO_NAME}/.github/workflows/")
-    with open(f"{REPO_NAME}/.github/workflows/{WORKFLOW_FILE}", "w") as file:
+# The download line in the build step; only its URL changes between builds
+_LINK_LINE = re.compile(r'(wget -O archive\.zip ")[^"]*(")')
+
+
+def _create_yml(link: str) -> None:
+    """Points the build workflow at the new Dropbox link, keeping the rest of the file as is.
+
+    The IPA name is no longer baked into the yaml: the workflow takes it as the `ipa_name`
+    input, passed when the build is triggered.
+    """
+
+    path = f"{REPO_NAME}/.github/workflows/{WORKFLOW_FILE}"
+
+    existing = None
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = f.read()
+
+    # Only update the link in place if the workflow already has the fixes (ipa_name input);
+    # otherwise it's missing or an outdated copy, so start over from the template.
+    if existing and "ipa_name" in existing and _LINK_LINE.search(existing):
+        print("Updating Dropbox link in existing yaml file...")
+        reading = _LINK_LINE.sub(lambda m: m.group(1) + link + m.group(2), existing, count=1)
+    else:
+        print("Creating yaml file...")
+        with open("action.yml") as f:
+            reading = f.read().replace("YOURLINKHERE", link)
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Keep LF endings so git sees only the changed link, not a rewritten file
+    with open(path, "w", newline="\n") as file:
         file.write(reading)
 
 
@@ -129,7 +153,8 @@ def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_nam
 
         subprocess.run(["gh", "repo", "create", REPO_NAME, "--private", "--clone"], check=True)
 
-    _create_yml(xcproj_link, project_name)
+    ipa_name = _ipa_name(project_name)
+    _create_yml(xcproj_link)
     _push_changes_to_repo()
 
     confirm = inq.prompt(
@@ -140,7 +165,10 @@ def create_and_clone_and_change_and_push_and_build(xcproj_link: str, project_nam
         sys.exit()
 
     # Run by file name: other workflows in the repo may share the "Build iOS app" display name
-    os.system(f"gh workflow run {WORKFLOW_FILE} --repo {GH_USERNAME}/{REPO_NAME}")
+    subprocess.run(
+        ["gh", "workflow", "run", WORKFLOW_FILE, "--repo", f"{GH_USERNAME}/{REPO_NAME}", "-f", f"ipa_name={ipa_name}"],
+        check=True,
+    )
     print(
         f"Check out your build at https://github.com/{GH_USERNAME}/{REPO_NAME}/actions and then click the topmost entry. Then scroll down to artifacts, and click the download icon next to your app."
     )

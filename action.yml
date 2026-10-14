@@ -1,47 +1,57 @@
 name: "Build iOS app"
 
 # on: [push]
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_name:
+        description: "IPA file name (without .ipa)"
+        required: true
+        type: string
 
 jobs:
   build_ios:
     runs-on: macos-latest
+    env:
+      IPA_NAME: ${{ inputs.ipa_name }}
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
 
       - name: build archive and ipaify
         run: |
-          wget -O archive.zip "YOURLINKHERE"
-          unzip archive.zip -d .
+          IPA_NAME="${IPA_NAME%.ipa}"
+          echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
 
-          # Detect the project name from the export (it changes with each version bump)
-          PROJ_PATH=$(find . -maxdepth 4 -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
+          wget -O archive.zip "YOURLINKHERE"
+          unzip -q archive.zip -d export
+
+          # Godot names the .xcodeproj after the export path, so detect it instead of hardcoding the version
+          PROJ_PATH=$(find export -maxdepth 4 -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
           if [ -z "$PROJ_PATH" ]; then
             echo "::error::No .xcodeproj found in the downloaded archive"
-            find . -maxdepth 3 -not -path "./.git*"
+            find export -maxdepth 3
             exit 1
           fi
+          PROJECT_NAME=$(basename "$PROJ_PATH" .xcodeproj)
+          echo "Using Xcode project: $PROJ_PATH"
           cd "$(dirname "$PROJ_PATH")"
-          PROJ=$(basename "$PROJ_PATH")
-          NAME="${PROJ%.xcodeproj}"
-          echo "Building $NAME"
 
-          xcodebuild archive -project "$PROJ" -scheme "$NAME" -archivePath "$NAME.xcarchive" -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+          xcodebuild archive -project "$PROJECT_NAME.xcodeproj" -scheme "$PROJECT_NAME" -archivePath "$PROJECT_NAME.xcarchive" -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
 
           mkdir Payload
-          mv "$NAME.xcarchive/Products/Applications/$NAME.app" "Payload/$NAME.app"
+          mv "$PROJECT_NAME.xcarchive/Products/Applications/$PROJECT_NAME.app" "Payload/$PROJECT_NAME.app"
 
-          zip -r "Example-Project.ipa" "Payload"
+          zip -r "$IPA_NAME.ipa" "Payload"
 
-          mv Example-Project.ipa ${{ runner.temp }}/Example-Project.ipa
+          mv "$IPA_NAME.ipa" "$RUNNER_TEMP/$IPA_NAME.ipa"
 
 
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
-          name: Example-Project
-          path: ${{ runner.temp }}/Example-Project.ipa
+          name: ${{ env.IPA_NAME }}
+          path: ${{ runner.temp }}/${{ env.IPA_NAME }}.ipa
           # you can also archive the entire directory
           # path: ${{ runner.temp }}/build
           retention-days: 3
