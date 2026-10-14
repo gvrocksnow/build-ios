@@ -10,6 +10,7 @@ SHORT_VERSION_ENV = "IPA_SHORT_VERSION"  # CFBundleShortVersionString, e.g. 1.0.
 BUILD_VERSION_ENV = "IPA_BUILD_VERSION"  # CFBundleVersion, e.g. 1.0.4
 
 INFO_PLIST_RE = re.compile(r"^Payload/[^/]+\.app/Info\.plist$")
+PCK_RE = re.compile(r"^Payload/[^/]+\.app/[^/]+\.pck$")
 
 
 def patch_info_plist(data: bytes) -> bytes:
@@ -50,20 +51,28 @@ def replace_pck(ipa_path: str) -> None:
         ipa_path (str): The path to the IPA file.
     """
 
-    replacement_path = f"Payload/{ipa_path[0:-4]}.app/{ipa_path[0:-4]}.pck"
     pck_file = f"{ipa_path[0:-4]}.pck"
+    tmp_path = f"{ipa_path[0:-4]}.tmp.ipa"
 
     with (
         zipfile.ZipFile(ipa_path) as ipa,
-        zipfile.ZipFile("temp_ipa.ipa", "w") as tmp_ipa,
+        zipfile.ZipFile(tmp_path, "w") as tmp_ipa,
     ):
+        # The .app inside may not share the IPA's file name (e.g. a renamed IPA),
+        # so replace whichever .pck sits at the root of the app bundle.
+        pcks = [name for name in ipa.namelist() if PCK_RE.match(name)]
+        if len(pcks) != 1:
+            raise RuntimeError(f"Expected one .pck in the app bundle, found: {pcks}")
+        replacement_path = pcks[0]
+        print(f"Replacing {replacement_path} with {pck_file}")
+
         for item in ipa.infolist():
             if item.filename == replacement_path:
                 with open(pck_file, "rb") as file:
-                    tmp_ipa.writestr(replacement_path, file.read())
+                    tmp_ipa.writestr(item, file.read())
             elif INFO_PLIST_RE.match(item.filename):
                 tmp_ipa.writestr(item, patch_info_plist(ipa.read(item.filename)))
             else:
                 tmp_ipa.writestr(item, ipa.read(item.filename))
 
-    os.replace("temp_ipa.ipa", ipa_path)
+    os.replace(tmp_path, ipa_path)
