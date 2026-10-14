@@ -5,3 +5,4 @@ __pycache__
 tempxcodeproject.zip
 .ruff_cache
 uv.lock
+venv/

@@ -43,9 +43,10 @@ def edit_ipa() -> None:
         if os.path.exists(ipa_path) and os.path.exists(f"{ipa_path[0:-4]}.pck"):
             break
         else:
+            env_hint = "\nYour IPA entry in '.env' is faulty!" if IPA and not invalid else ""
             print(
                 f"Invalid files! Either '{ipa_path[0:-4]}.pck' and/or {ipa_path} doesn't/don't exist!"
-                f"{"\nYour IPA entry in '.env' is faulty!" if IPA and not invalid else ''}"
+                f"{env_hint}"
             )
             invalid = True
 
