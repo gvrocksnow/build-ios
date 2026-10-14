@@ -54,6 +54,9 @@ def _push_changes_to_repo() -> None:
 def _create_yml(link: str, project_name: str) -> None:
     """Creates the yaml file and writes to it."""
 
+    # Accept a full path to the .ipa (e.g. from .env); the workflow needs only the bare name
+    project_name = os.path.splitext(os.path.basename(project_name.strip().strip('"')))[0]
+
     with open("action.yml") as f:
         reading = f.read()
     reading = reading.replace("YOURLINKHERE", link).replace("Example-Project", project_name)
